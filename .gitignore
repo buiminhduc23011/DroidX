@@ -1,0 +1,6 @@
+build/
+*.idsig
+*.log
+.idea/
+.vscode/
+*.tmp
