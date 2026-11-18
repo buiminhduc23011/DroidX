@@ -141,7 +141,7 @@
                             android:layout_height="match_parent"
                             android:gravity="center"
                             android:text="00"
-                            android:textColor="#FFFFFF"
+                            android:textColor="#8E8E98"
                             android:textSize="68sp"
                             android:fontFamily="sans-serif-black"
                             android:includeFontPadding="false" />

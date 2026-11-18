@@ -23,7 +23,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
+import android.view.animation.AccelerateInterpolator;
 import android.view.animation.AnimationUtils;
+import android.view.animation.DecelerateInterpolator;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -497,30 +499,30 @@ public class MainActivity extends Activity {
 
                 // Only animate 3D flips if user is looking at Clock (currentPage == 0)
                 if (currentPage == 0) {
-                    // Flip Seconds (snappy 90ms)
+                    // Flip Seconds: slow, gentle, relaxed mechanical motion (240ms + 240ms)
                     if (!currentSec.equals(lastSeconds)) {
                         if (!lastSeconds.isEmpty()) {
-                            animateFlip(flSecondCard, tvFlipSeconds, currentSec, 90);
+                            animateFlip(flSecondCard, tvFlipSeconds, currentSec, 240);
                         } else {
                             tvFlipSeconds.setText(currentSec);
                         }
                         lastSeconds = currentSec;
                     }
 
-                    // Flip Minutes (140ms)
+                    // Flip Minutes (260ms + 260ms)
                     if (!currentMin.equals(lastMinutes)) {
                         if (!lastMinutes.isEmpty()) {
-                            animateFlip(flMinuteCard, tvFlipMinutes, currentMin, 140);
+                            animateFlip(flMinuteCard, tvFlipMinutes, currentMin, 260);
                         } else {
                             tvFlipMinutes.setText(currentMin);
                         }
                         lastMinutes = currentMin;
                     }
 
-                    // Flip Hours (140ms)
+                    // Flip Hours (260ms + 260ms)
                     if (!currentHour.equals(lastHours)) {
                         if (!lastHours.isEmpty()) {
-                            animateFlip(flHourCard, tvFlipHours, currentHour, 140);
+                            animateFlip(flHourCard, tvFlipHours, currentHour, 260);
                         } else {
                             tvFlipHours.setText(currentHour);
                         }
@@ -551,12 +553,14 @@ public class MainActivity extends Activity {
         card.animate()
                 .rotationX(90f)
                 .setDuration(durationHalf)
+                .setInterpolator(new AccelerateInterpolator(1.2f))
                 .withEndAction(() -> {
                     textView.setText(newText);
                     card.setRotationX(-90f);
                     card.animate()
                             .rotationX(0f)
                             .setDuration(durationHalf)
+                            .setInterpolator(new DecelerateInterpolator(1.2f))
                             .start();
                 })
                 .start();
