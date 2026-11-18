@@ -24,6 +24,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.animation.AccelerateInterpolator;
+import android.view.animation.Animation;
 import android.view.animation.AnimationUtils;
 import android.view.animation.DecelerateInterpolator;
 import android.webkit.JavascriptInterface;
@@ -86,6 +87,10 @@ public class MainActivity extends Activity {
     private float startX, startY;
     private int screenWidth;
 
+    // Pre-cached Material Carousel Animations
+    private Animation animSlideInRight, animSlideOutLeft;
+    private Animation animSlideInLeft, animSlideOutRight;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -115,6 +120,7 @@ public class MainActivity extends Activity {
 
         setupNativeTTS();
         initViews();
+        initAnimations();
         setupClock();
         setupWebView();
         setupAppDrawer();
@@ -181,17 +187,50 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void initAnimations() {
+        animSlideInRight = AnimationUtils.loadAnimation(this, R.anim.slide_in_right);
+        animSlideOutLeft = AnimationUtils.loadAnimation(this, R.anim.slide_out_left);
+        animSlideInLeft = AnimationUtils.loadAnimation(this, R.anim.slide_in_left);
+        animSlideOutRight = AnimationUtils.loadAnimation(this, R.anim.slide_out_right);
+
+        Animation.AnimationListener listener = new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+                viewFlipper.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                viewFlipper.setLayerType(View.LAYER_TYPE_NONE, null);
+                // Pause / resume WebView only AFTER the slide animation completes
+                if (wvEnglish != null) {
+                    if (currentPage == 1) {
+                        wvEnglish.onResume();
+                    } else {
+                        wvEnglish.onPause();
+                    }
+                }
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {}
+        };
+
+        animSlideInRight.setAnimationListener(listener);
+        animSlideInLeft.setAnimationListener(listener);
+    }
+
     // --- INFINITE ROLLING PAGER ---
     private void moveToNext() {
-        viewFlipper.setInAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_in_right));
-        viewFlipper.setOutAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_out_left));
+        viewFlipper.setInAnimation(animSlideInRight);
+        viewFlipper.setOutAnimation(animSlideOutLeft);
         int next = (currentPage + 1) % TOTAL_PAGES;
         setPage(next);
     }
 
     private void moveToPrev() {
-        viewFlipper.setInAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_in_left));
-        viewFlipper.setOutAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_out_right));
+        viewFlipper.setInAnimation(animSlideInLeft);
+        viewFlipper.setOutAnimation(animSlideOutRight);
         int prev = (currentPage - 1 + TOTAL_PAGES) % TOTAL_PAGES;
         setPage(prev);
     }
@@ -199,27 +238,22 @@ public class MainActivity extends Activity {
     private void goToPage(int targetPage) {
         if (targetPage == currentPage) return;
         if (targetPage > currentPage) {
-            viewFlipper.setInAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_in_right));
-            viewFlipper.setOutAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_out_left));
+            viewFlipper.setInAnimation(animSlideInRight);
+            viewFlipper.setOutAnimation(animSlideOutLeft);
         } else {
-            viewFlipper.setInAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_in_left));
-            viewFlipper.setOutAnimation(AnimationUtils.loadAnimation(this, R.anim.slide_out_right));
+            viewFlipper.setInAnimation(animSlideInLeft);
+            viewFlipper.setOutAnimation(animSlideOutRight);
         }
         setPage(targetPage);
     }
 
     private void setPage(int target) {
+        if (target == 1 && wvEnglish != null) {
+            // Pre-resume so content is immediately visible
+            wvEnglish.onResume();
+        }
         currentPage = target;
         viewFlipper.setDisplayedChild(currentPage);
-
-        // Dynamic resource optimization: pause WebView JS/rendering when not on English page
-        if (wvEnglish != null) {
-            if (currentPage == 1) {
-                wvEnglish.onResume();
-            } else {
-                wvEnglish.onPause();
-            }
-        }
     }
 
     // --- SWIPE GESTURE DETECTION (INFINITE ROLLING) ---
