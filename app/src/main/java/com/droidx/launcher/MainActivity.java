@@ -499,30 +499,30 @@ public class MainActivity extends Activity {
 
                 // Only animate 3D flips if user is looking at Clock (currentPage == 0)
                 if (currentPage == 0) {
-                    // Flip Seconds: slow, gentle, relaxed mechanical motion (240ms + 240ms)
+                    // Flip Seconds: continuous full 1-second mechanical cycle (490ms down + 490ms up)
                     if (!currentSec.equals(lastSeconds)) {
                         if (!lastSeconds.isEmpty()) {
-                            animateFlip(flSecondCard, tvFlipSeconds, currentSec, 240);
+                            animateFlip(flSecondCard, tvFlipSeconds, currentSec, 490);
                         } else {
                             tvFlipSeconds.setText(currentSec);
                         }
                         lastSeconds = currentSec;
                     }
 
-                    // Flip Minutes (260ms + 260ms)
+                    // Flip Minutes (490ms + 490ms)
                     if (!currentMin.equals(lastMinutes)) {
                         if (!lastMinutes.isEmpty()) {
-                            animateFlip(flMinuteCard, tvFlipMinutes, currentMin, 260);
+                            animateFlip(flMinuteCard, tvFlipMinutes, currentMin, 490);
                         } else {
                             tvFlipMinutes.setText(currentMin);
                         }
                         lastMinutes = currentMin;
                     }
 
-                    // Flip Hours (260ms + 260ms)
+                    // Flip Hours (490ms + 490ms)
                     if (!currentHour.equals(lastHours)) {
                         if (!lastHours.isEmpty()) {
-                            animateFlip(flHourCard, tvFlipHours, currentHour, 260);
+                            animateFlip(flHourCard, tvFlipHours, currentHour, 490);
                         } else {
                             tvFlipHours.setText(currentHour);
                         }
@@ -550,17 +550,18 @@ public class MainActivity extends Activity {
 
     private void animateFlip(final View card, final TextView textView, final String newText, final long durationHalf) {
         card.animate().cancel();
+        card.setRotationX(0f);
         card.animate()
                 .rotationX(90f)
                 .setDuration(durationHalf)
-                .setInterpolator(new AccelerateInterpolator(1.2f))
+                .setInterpolator(new AccelerateInterpolator(1.1f))
                 .withEndAction(() -> {
                     textView.setText(newText);
                     card.setRotationX(-90f);
                     card.animate()
                             .rotationX(0f)
                             .setDuration(durationHalf)
-                            .setInterpolator(new DecelerateInterpolator(1.2f))
+                            .setInterpolator(new DecelerateInterpolator(1.1f))
                             .start();
                 })
                 .start();
