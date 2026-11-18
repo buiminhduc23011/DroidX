@@ -9,8 +9,7 @@ import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
-import android.view.animation.AccelerateInterpolator;
-import android.view.animation.DecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 import android.widget.FrameLayout;
 
 public class SplitFlipCardView extends FrameLayout {
@@ -26,6 +25,8 @@ public class SplitFlipCardView extends FrameLayout {
     private int cardWidth = 0;
     private int cardHeight = 0;
     private int halfHeight = 0;
+    private int topH = 0;
+    private int bottomTop = 0;
     private int seamHeight = 2; // px
 
     public SplitFlipCardView(Context context) {
@@ -53,17 +54,18 @@ public class SplitFlipCardView extends FrameLayout {
 
     private void init(Context context) {
         float density = getResources().getDisplayMetrics().density;
-        textSizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 68, getResources().getDisplayMetrics());
+        // 60sp font size provides clean, uncrowded spacing inside 100x130dp cards
+        textSizePx = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 60, getResources().getDisplayMetrics());
         seamHeight = Math.max(2, (int) (2 * density));
 
         setClipChildren(false);
         setClipToPadding(false);
 
-        // 1. Top Static (reveals new value top half)
+        // 1. Top Static (reveals upcoming value top half)
         topStatic = new HalfCardView(context, true, R.drawable.bg_flip_card_top);
         addView(topStatic);
 
-        // 2. Bottom Static (shows old value bottom half)
+        // 2. Bottom Static (shows current value bottom half)
         bottomStatic = new HalfCardView(context, false, R.drawable.bg_flip_card_bottom);
         addView(bottomStatic);
 
@@ -87,8 +89,32 @@ public class SplitFlipCardView extends FrameLayout {
     }
 
     @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int w = getMeasuredWidth();
+        int h = getMeasuredHeight();
+        if (w > 0 && h > 0) {
+            cardWidth = w;
+            cardHeight = h;
+            halfHeight = h / 2;
+            topH = halfHeight - (seamHeight / 2);
+            bottomTop = halfHeight + (seamHeight / 2);
+            int bottomH = h - bottomTop;
+
+            int widthSpec = MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY);
+            int topSpec = MeasureSpec.makeMeasureSpec(topH, MeasureSpec.EXACTLY);
+            int bottomSpec = MeasureSpec.makeMeasureSpec(bottomH, MeasureSpec.EXACTLY);
+
+            topStatic.measure(widthSpec, topSpec);
+            topFlap.measure(widthSpec, topSpec);
+            bottomStatic.measure(widthSpec, bottomSpec);
+            bottomFlap.measure(widthSpec, bottomSpec);
+            vSeam.measure(widthSpec, MeasureSpec.makeMeasureSpec(seamHeight, MeasureSpec.EXACTLY));
+        }
+    }
+
+    @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        super.onLayout(changed, left, top, right, bottom);
         int w = right - left;
         int h = bottom - top;
         if (w <= 0 || h <= 0) return;
@@ -96,24 +122,23 @@ public class SplitFlipCardView extends FrameLayout {
         cardWidth = w;
         cardHeight = h;
         halfHeight = h / 2;
-
-        int topH = halfHeight - (seamHeight / 2);
-        int bottomTop = halfHeight + (seamHeight / 2);
+        topH = halfHeight - (seamHeight / 2);
+        bottomTop = halfHeight + (seamHeight / 2);
         int bottomH = h - bottomTop;
 
-        // Position Top Static & Top Flap
+        // Top Static & Top Flap (top edge = 0, bottom edge = topH)
         topStatic.layout(0, 0, w, topH);
         topFlap.layout(0, 0, w, topH);
         topFlap.setPivotX(w / 2f);
         topFlap.setPivotY(topH); // Hinge anchored exactly at the center seam!
 
-        // Position Bottom Static & Bottom Flap
+        // Bottom Static & Bottom Flap (top edge = bottomTop, bottom edge = h)
         bottomStatic.layout(0, bottomTop, w, bottomTop + bottomH);
         bottomFlap.layout(0, bottomTop, w, bottomTop + bottomH);
         bottomFlap.setPivotX(w / 2f);
         bottomFlap.setPivotY(0f); // Hinge anchored exactly at the center seam!
 
-        // Position Center Seam
+        // Center Seam Line
         vSeam.layout(0, topH, w, bottomTop);
     }
 
@@ -156,20 +181,20 @@ public class SplitFlipCardView extends FrameLayout {
         bottomFlap.setRotationX(-90f);
         bottomFlap.setVisibility(View.GONE);
 
-        // 4. Animate Top Flap (0 -> 90 deg down towards center hinge)
+        // 4. Smooth linear fold down from 0 to 90 deg (calm, steady, no whip)
         topFlap.animate()
                 .rotationX(90f)
                 .setDuration(durationHalf)
-                .setInterpolator(new AccelerateInterpolator(1.15f))
+                .setInterpolator(new LinearInterpolator())
                 .withEndAction(() -> {
                     topFlap.setVisibility(View.GONE);
                     bottomFlap.setVisibility(View.VISIBLE);
 
-                    // 5. Animate Bottom Flap (-90 -> 0 deg settling down on bottom card)
+                    // 5. Smooth linear unfold from -90 to 0 deg
                     bottomFlap.animate()
                             .rotationX(0f)
                             .setDuration(durationHalf)
-                            .setInterpolator(new DecelerateInterpolator(1.15f))
+                            .setInterpolator(new LinearInterpolator())
                             .withEndAction(() -> {
                                 bottomStatic.setText(newValue);
                                 bottomFlap.setVisibility(View.GONE);
@@ -217,31 +242,32 @@ public class SplitFlipCardView extends FrameLayout {
 
         @Override
         protected void onDraw(Canvas canvas) {
-            super.onDraw(canvas);
             int w = getWidth();
             int h = getHeight();
-            if (w <= 0 || h <= 0) return;
+            if (w <= 0 || h <= 0 || cardHeight <= 0) return;
+
+            // STRICT CANVAS CLIPPING: Physically impossible for any pixel to draw outside [0, 0, w, h]
+            canvas.save();
+            canvas.clipRect(0, 0, w, h);
 
             // Draw half-card background (rounded outer corners, flat inner meeting edge)
             bgDrawable.setBounds(0, 0, w, h);
             bgDrawable.draw(canvas);
 
-            // Compute baseline so text is centered across the FULL card height (2 * h + seam)
-            int fullH = (2 * h) + seamHeight;
-            float fontCenterOffset = (textPaint.descent() + textPaint.ascent()) / 2f;
-            float fullBaseline = (fullH / 2f) - fontCenterOffset;
+            // Compute baseline so text is centered across the FULL card height
+            Paint.FontMetrics fm = textPaint.getFontMetrics();
+            float fontCenterOffset = (fm.descent + fm.ascent) / 2f;
+            float fullBaseline = (cardHeight / 2f) - fontCenterOffset;
 
-            canvas.save();
             if (isTop) {
-                // Top half: draws the top part of the digit (0 to h)
-                // Strictly clipped to view bounds: cannot draw beyond h!
+                // Top half: draws upper part of text
                 canvas.drawText(text, w / 2f, fullBaseline, textPaint);
             } else {
-                // Bottom half: shifts canvas by -(h + seamHeight) so only bottom part of digit is drawn
-                // Strictly clipped to view bounds: cannot draw above 0!
-                canvas.translate(0, -(h + seamHeight));
+                // Bottom half: translate up by bottomTop so only lower part of text is drawn
+                canvas.translate(0, -bottomTop);
                 canvas.drawText(text, w / 2f, fullBaseline, textPaint);
             }
+
             canvas.restore();
         }
     }
