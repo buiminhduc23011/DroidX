@@ -58,9 +58,9 @@ public class MainActivity extends Activity {
     private ViewFlipper viewFlipper;
     private int currentPage = 0;
 
-    // Flip Clock Views
-    private TextView tvFlipHours, tvFlipMinutes, tvFlipSeconds, tvDate;
-    private FrameLayout flHourCard, flMinuteCard, flSecondCard;
+    // Authentic Mechanical Split-Flap Clock
+    private SplitFlipCardView cardHours, cardMinutes, cardSeconds;
+    private TextView tvDate;
     private String lastHours = "";
     private String lastMinutes = "";
     private String lastSeconds = "";
@@ -154,23 +154,14 @@ public class MainActivity extends Activity {
     private void initViews() {
         viewFlipper = findViewById(R.id.viewFlipper);
 
-        tvFlipHours = findViewById(R.id.tvFlipHours);
-        tvFlipMinutes = findViewById(R.id.tvFlipMinutes);
-        tvFlipSeconds = findViewById(R.id.tvFlipSeconds);
+        cardHours = findViewById(R.id.cardHours);
+        cardMinutes = findViewById(R.id.cardMinutes);
+        cardSeconds = findViewById(R.id.cardSeconds);
         tvDate = findViewById(R.id.tvDate);
-        flHourCard = findViewById(R.id.flHourCard);
-        flMinuteCard = findViewById(R.id.flMinuteCard);
-        flSecondCard = findViewById(R.id.flSecondCard);
 
-        float scale = getResources().getDisplayMetrics().density * 8000;
-        flHourCard.setCameraDistance(scale);
-        flMinuteCard.setCameraDistance(scale);
-        flSecondCard.setCameraDistance(scale);
-
-        // Hardware Acceleration layer for smooth 60fps GPU rendering
-        flHourCard.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        flMinuteCard.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        flSecondCard.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        cardHours.setTextColor(Color.WHITE);
+        cardMinutes.setTextColor(Color.WHITE);
+        cardSeconds.setTextColor(Color.parseColor("#8E8E98"));
 
         wvEnglish = findViewById(R.id.wvEnglish);
         pbWebLoading = findViewById(R.id.pbWebLoading);
@@ -497,44 +488,31 @@ public class MainActivity extends Activity {
                 String currentSec = secFormat.format(date);
                 String currentDate = dateFormat.format(date).toUpperCase(Locale.getDefault());
 
-                // Only animate 3D flips if user is looking at Clock (currentPage == 0)
-                if (currentPage == 0) {
-                    // Flip Seconds: continuous full 1-second mechanical cycle (490ms down + 490ms up)
-                    if (!currentSec.equals(lastSeconds)) {
-                        if (!lastSeconds.isEmpty()) {
-                            animateFlip(flSecondCard, tvFlipSeconds, currentSec, 490);
-                        } else {
-                            tvFlipSeconds.setText(currentSec);
-                        }
-                        lastSeconds = currentSec;
+                // Authentic Split-Flap Page Flip (Top half folds down, bottom half unfolds)
+                if (!currentSec.equals(lastSeconds)) {
+                    if (!lastSeconds.isEmpty() && currentPage == 0) {
+                        cardSeconds.flipTo(currentSec, 490);
+                    } else {
+                        cardSeconds.setValue(currentSec);
                     }
-
-                    // Flip Minutes (490ms + 490ms)
-                    if (!currentMin.equals(lastMinutes)) {
-                        if (!lastMinutes.isEmpty()) {
-                            animateFlip(flMinuteCard, tvFlipMinutes, currentMin, 490);
-                        } else {
-                            tvFlipMinutes.setText(currentMin);
-                        }
-                        lastMinutes = currentMin;
-                    }
-
-                    // Flip Hours (490ms + 490ms)
-                    if (!currentHour.equals(lastHours)) {
-                        if (!lastHours.isEmpty()) {
-                            animateFlip(flHourCard, tvFlipHours, currentHour, 490);
-                        } else {
-                            tvFlipHours.setText(currentHour);
-                        }
-                        lastHours = currentHour;
-                    }
-                } else {
-                    // Instantly update text without wasting CPU on 3D animation
-                    tvFlipSeconds.setText(currentSec);
-                    tvFlipMinutes.setText(currentMin);
-                    tvFlipHours.setText(currentHour);
                     lastSeconds = currentSec;
+                }
+
+                if (!currentMin.equals(lastMinutes)) {
+                    if (!lastMinutes.isEmpty() && currentPage == 0) {
+                        cardMinutes.flipTo(currentMin, 490);
+                    } else {
+                        cardMinutes.setValue(currentMin);
+                    }
                     lastMinutes = currentMin;
+                }
+
+                if (!currentHour.equals(lastHours)) {
+                    if (!lastHours.isEmpty() && currentPage == 0) {
+                        cardHours.flipTo(currentHour, 490);
+                    } else {
+                        cardHours.setValue(currentHour);
+                    }
                     lastHours = currentHour;
                 }
 
@@ -546,25 +524,6 @@ public class MainActivity extends Activity {
             }
         };
         timeHandler.post(timeRunnable);
-    }
-
-    private void animateFlip(final View card, final TextView textView, final String newText, final long durationHalf) {
-        card.animate().cancel();
-        card.setRotationX(0f);
-        card.animate()
-                .rotationX(90f)
-                .setDuration(durationHalf)
-                .setInterpolator(new AccelerateInterpolator(1.1f))
-                .withEndAction(() -> {
-                    textView.setText(newText);
-                    card.setRotationX(-90f);
-                    card.animate()
-                            .rotationX(0f)
-                            .setDuration(durationHalf)
-                            .setInterpolator(new DecelerateInterpolator(1.1f))
-                            .start();
-                })
-                .start();
     }
 
     @Override
