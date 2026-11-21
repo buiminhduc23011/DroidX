@@ -20,6 +20,7 @@
 
             <!-- Center Flip Clock Block -->
             <LinearLayout
+                android:id="@+id/clockCenter"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_centerInParent="true"
@@ -109,6 +110,83 @@
                     android:fontFamily="sans-serif-medium"
                     android:gravity="center" />
 
+                <!-- Greeting by time -->
+                <TextView
+                    android:id="@+id/tvGreeting"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Chào buổi sáng"
+                    android:textColor="#EDEDF2"
+                    android:textSize="18sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:gravity="center" />
+
+                <!-- Fun fact / riddle (tap to next, long-press to hear) -->
+                <TextView
+                    android:id="@+id/tvFunFact"
+                    android:layout_width="300dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:text="Chạm để xem sự thật vui khác"
+                    android:textColor="#9A9AA5"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:maxLines="3" />
+
+                <!-- Page dots: biết đang ở trang nào, vuốt để đổi -->
+                <TextView
+                    android:id="@+id/tvDots"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:text="● ○ ○"
+                    android:textColor="#5A5A64"
+                    android:textSize="9sp"
+                    android:letterSpacing="0.3"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+            <!-- YouTube: viên thuốc nhỏ góc phải, chạm để mở app gốc -->
+            <LinearLayout
+                android:id="@+id/ytPill"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_alignParentBottom="true"
+                android:layout_alignParentEnd="true"
+                android:layout_marginEnd="12dp"
+                android:layout_marginBottom="12dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:background="#0D0D10">
+
+                <View
+                    android:layout_width="5dp"
+                    android:layout_height="5dp"
+                    android:background="@drawable/dot_colon" />
+
+                <TextView
+                    android:id="@+id/tvMusicLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="YOUTUBE"
+                    android:textColor="#8E8E98"
+                    android:textSize="10sp"
+                    android:letterSpacing="0.2" />
+
+                <TextView
+                    android:id="@+id/tvMusicState"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="mở"
+                    android:textColor="#5A5A64"
+                    android:textSize="10sp" />
+
             </LinearLayout>
 
         </RelativeLayout>
@@ -148,6 +226,20 @@
                 android:text="↻"
                 android:textColor="#888888"
                 android:textSize="13sp" />
+
+            <!-- Page dots + label: Trang học tiếng Anh -->
+            <TextView
+                android:id="@+id/tvDotsEng"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentTop="true"
+                android:layout_alignParentStart="true"
+                android:layout_marginTop="14dp"
+                android:layout_marginStart="16dp"
+                android:text="○ ● ○   TIẾNG ANH"
+                android:textColor="#5A5A64"
+                android:textSize="10sp"
+                android:letterSpacing="0.15" />
         </RelativeLayout>
 
         <!-- PAGE 2: App Drawer -->
@@ -159,6 +251,18 @@
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:paddingTop="36dp">
+
+            <!-- Page dots -->
+            <TextView
+                android:id="@+id/tvDotsApps"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:text="○ ○ ●   KHO APP"
+                android:textColor="#5A5A64"
+                android:textSize="10sp"
+                android:letterSpacing="0.15"
+                android:gravity="center" />
 
             <!-- Search and Settings Bar -->
             <LinearLayout
@@ -188,9 +292,9 @@
                     android:layout_height="44dp"
                     android:layout_marginStart="10dp"
                     android:backgroundTint="@color/card_bg"
-                    android:text="⚙️"
+                    android:text="≡"
                     android:textColor="@color/text_white"
-                    android:textSize="16sp" />
+                    android:textSize="18sp" />
             </LinearLayout>
 
             <!-- Apps Grid -->

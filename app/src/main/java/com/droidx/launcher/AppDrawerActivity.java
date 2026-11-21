@@ -94,8 +94,9 @@ public class AppDrawerActivity extends Activity {
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(getPackageName())) continue; // Skip self
 
-            // Filter out stubborn Vivo bloat
-            if (pkg.contains("com.vivo.appstore") || pkg.contains("com.bbk.cloud") || pkg.contains("com.vivo.imanager")) {
+            // Filter out stubborn Vivo bloat (QC: vivo Store = com.vivo.website)
+            if (pkg.contains("com.vivo.appstore") || pkg.contains("com.vivo.website")
+                    || pkg.contains("com.bbk.cloud") || pkg.contains("com.vivo.imanager")) {
                 continue;
             }
 

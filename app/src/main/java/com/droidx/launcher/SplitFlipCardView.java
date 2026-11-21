@@ -73,13 +73,13 @@ public class SplitFlipCardView extends FrameLayout {
         bottomFlap = new HalfCardView(context, false, R.drawable.bg_flip_card_bottom);
         bottomFlap.setVisibility(View.GONE);
         bottomFlap.setCameraDistance(density * 8000);
-        bottomFlap.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        bottomFlap.setLayerType(View.LAYER_TYPE_NONE, null);
         addView(bottomFlap);
 
         // 4. Top Flap (folds down from 0 to 90)
         topFlap = new HalfCardView(context, true, R.drawable.bg_flip_card_top);
         topFlap.setCameraDistance(density * 8000);
-        topFlap.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        topFlap.setLayerType(View.LAYER_TYPE_NONE, null);
         addView(topFlap);
 
         // 5. Center Split Seam Line
@@ -167,6 +167,10 @@ public class SplitFlipCardView extends FrameLayout {
         topFlap.animate().cancel();
         bottomFlap.animate().cancel();
 
+        // Bật GPU chỉ trong lúc lật, xong tắt ngay để máy yếu đỡ lag + đỡ nóng
+        topFlap.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        bottomFlap.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
         // 1. Prepare static backgrounds
         topStatic.setText(newValue);
         bottomStatic.setText(oldValue);
@@ -202,6 +206,9 @@ public class SplitFlipCardView extends FrameLayout {
                                 topFlap.setRotationX(0f);
                                 topFlap.setText(newValue);
                                 topFlap.setVisibility(View.VISIBLE);
+                                // Tắt GPU sau animation: tiết kiệm VRAM trên ROM gốc
+                                topFlap.setLayerType(View.LAYER_TYPE_NONE, null);
+                                bottomFlap.setLayerType(View.LAYER_TYPE_NONE, null);
                             })
                             .start();
                 })

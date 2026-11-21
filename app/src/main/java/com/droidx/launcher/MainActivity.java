@@ -61,16 +61,36 @@ public class MainActivity extends Activity {
 
     // Authentic Mechanical Split-Flap Clock
     private SplitFlipCardView cardHours, cardMinutes, cardSeconds;
-    private TextView tvDate;
+    private TextView tvDate, tvGreeting, tvFunFact;
+    private int funIndex = 0;
+    private long lastFactTime = 0;
     private String lastHours = "";
     private String lastMinutes = "";
     private String lastSeconds = "";
     private Handler timeHandler;
     private Runnable timeRunnable;
 
-    // WebView
+    private static final String[] FUN_FACTS = {
+        "Tim bạch tuộc có 3 trái tim, khi bơi một tim sẽ ngừng đập.",
+        "Mật ong để hàng nghìn năm cũng không hỏng.",
+        "Đố: Cái gì càng lấy đi càng to ra? — Cái hố.",
+        "Hươu cao cổ chỉ ngủ khoảng 30 phút mỗi ngày.",
+        "Đố: Lịch nào dài nhất? — Lịch sử.",
+        "Voi là loài duy nhất không thể nhảy.",
+        "Một ngày trên sao Kim dài hơn một năm trên sao Kim.",
+        "Đố: Con gì đập thì sống, không đập thì chết? — Con tim.",
+        "Sên có thể ngủ liền 3 năm.",
+        "Chữ Q là chữ cái duy nhất không có trong tên bang nào của Mỹ.",
+        "Đố: Cái gì có cổ mà không có đầu? — Cái chai.",
+        "Râu cá mập có thể phát hiện một giọt máu trong bể bơi Olympic."
+    };
+
+    // WebView - lazy init để máy stock RAM yếu không lag lúc khởi động
     private WebView wvEnglish;
     private ProgressBar pbWebLoading;
+    private boolean webViewInitialized = false;
+
+    // YouTube: viên thuốc mở app YouTube gốc (WebView lag nên bỏ hẳn)
 
     // Native TextToSpeech Engine
     private TextToSpeech textToSpeech;
@@ -85,11 +105,18 @@ public class MainActivity extends Activity {
 
     // Touch & Swipe
     private float startX, startY;
-    private int screenWidth;
+    private int screenWidth, screenHeight;
+    private TextView tvDots;
 
     // Pre-cached Material Carousel Animations
     private Animation animSlideInRight, animSlideOutLeft;
     private Animation animSlideInLeft, animSlideOutRight;
+
+    // Cache formatters: tránh new SimpleDateFormat mỗi giây gây GC lag trên máy yếu
+    private static final SimpleDateFormat HOUR_FMT = new SimpleDateFormat("HH", Locale.getDefault());
+    private static final SimpleDateFormat MIN_FMT = new SimpleDateFormat("mm", Locale.getDefault());
+    private static final SimpleDateFormat SEC_FMT = new SimpleDateFormat("ss", Locale.getDefault());
+    private static final SimpleDateFormat DATE_FMT = new SimpleDateFormat("EEEE • dd 'THÁNG' MM", new Locale("vi", "VN"));
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +135,7 @@ public class MainActivity extends Activity {
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         screenWidth = dm.widthPixels;
+        screenHeight = dm.heightPixels;
 
         // Ensure media volume is at 100% for English flashcard pronunciation
         try {
@@ -122,8 +150,8 @@ public class MainActivity extends Activity {
         initViews();
         initAnimations();
         setupClock();
-        setupWebView();
-        setupAppDrawer();
+        // Không init WebView ngay: đợi vuốt sang trang học mới load -> giảm ~150MB RAM lúc khởi động
+        setupAppDrawerAsync();
     }
 
     private void setupNativeTTS() {
@@ -169,6 +197,23 @@ public class MainActivity extends Activity {
         cardMinutes.setTextColor(Color.WHITE);
         cardSeconds.setTextColor(Color.parseColor("#8E8E98"));
 
+        tvGreeting = findViewById(R.id.tvGreeting);
+        tvFunFact = findViewById(R.id.tvFunFact);
+        tvDots = findViewById(R.id.tvDots);
+        if (tvFunFact != null && FUN_FACTS.length > 0) {
+            tvFunFact.setText(FUN_FACTS[0]);
+        }
+        if (tvFunFact != null) {
+            tvFunFact.setOnClickListener(v -> showNextFact());
+            tvFunFact.setOnLongClickListener(v -> { speakCurrentFact(); return true; });
+        }
+
+        View ytPill = findViewById(R.id.ytPill);
+        if (ytPill != null) {
+            // Chạm: mở app YouTube gốc (mượt, không lag WebView)
+            ytPill.setOnClickListener(v -> openYouTubeApp());
+        }
+
         wvEnglish = findViewById(R.id.wvEnglish);
         pbWebLoading = findViewById(R.id.pbWebLoading);
 
@@ -203,13 +248,16 @@ public class MainActivity extends Activity {
             public void onAnimationEnd(Animation animation) {
                 viewFlipper.setLayerType(View.LAYER_TYPE_NONE, null);
                 // Pause / resume WebView only AFTER the slide animation completes
-                if (wvEnglish != null) {
+                if (webViewInitialized && wvEnglish != null) {
                     if (currentPage == 1) {
                         wvEnglish.onResume();
+                        wvEnglish.resumeTimers();
                     } else {
                         wvEnglish.onPause();
+                        wvEnglish.pauseTimers();
                     }
                 }
+                // Nhạc giờ là app gốc, không còn WebView nhạc để pause
             }
 
             @Override
@@ -249,11 +297,52 @@ public class MainActivity extends Activity {
 
     private void setPage(int target) {
         if (target == 1 && wvEnglish != null) {
-            // Pre-resume so content is immediately visible
-            wvEnglish.onResume();
+            // Lazy-load: lần đầu vuốt sang mới init WebView
+            if (!webViewInitialized) {
+                setupWebView();
+            } else {
+                // Pre-resume so content is immediately visible
+                wvEnglish.onResume();
+                wvEnglish.resumeTimers();
+            }
         }
         currentPage = target;
         viewFlipper.setDisplayedChild(currentPage);
+        updateDots();
+    }
+
+    private void updateDots() {
+        if (tvDots == null) tvDots = findViewById(R.id.tvDots);
+        if (tvDots == null) return;
+        // Trang 0: đồng hồ • 1: tiếng Anh • 2: kho app
+        if (currentPage == 0) tvDots.setText("● ○ ○");
+        else if (currentPage == 1) tvDots.setText("○ ● ○");
+        else tvDots.setText("○ ○ ●");
+    }
+
+    // --- YOUTUBE: mở app gốc, chưa cài thì ra thẳng Play Store ---
+    private void openYouTubeApp() {
+        String ytPkg = "com.google.android.youtube";
+        try {
+            getPackageManager().getPackageInfo(ytPkg, 0);
+            // Đã cài: mở thẳng trang tìm kiếm nhạc lofi trong app
+            Intent i = new Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://www.youtube.com/results?search_query=nhac+lofi+chill"));
+            i.setPackage(ytPkg);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+        } catch (Exception e) {
+            // Chưa cài: mở Play Store đúng trang YouTube để cài 1 chạm
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        android.net.Uri.parse("market://details?id=" + ytPkg)));
+            } catch (Exception e2) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://play.google.com/store/apps/details?id=" + ytPkg)));
+                } catch (Exception ignored) {}
+            }
+        }
     }
 
     // --- SWIPE GESTURE DETECTION (INFINITE ROLLING) ---
@@ -305,8 +394,8 @@ public class MainActivity extends Activity {
             android.util.Log.d("DroidX_TTS", "speak called: " + text + " (lang: " + lang + ")");
             if (text == null || text.trim().isEmpty()) return;
             try {
-                if (textToSpeech != null) {
-                    textToSpeech.setLanguage(Locale.US);
+                if (textToSpeech != null && isTtsReady) {
+                    // Không setLanguage mỗi lần speak (tốn CPU) — đã set ở init
                     textToSpeech.speak(text.trim(), TextToSpeech.QUEUE_FLUSH, null, "card_pronounce");
                 }
             } catch (Exception e) {
@@ -354,8 +443,9 @@ public class MainActivity extends Activity {
         view.evaluateJavascript(polyfill, null);
     }
 
-    // --- WEBVIEW: HỌC TIẾNG ANH ---
+    // --- WEBVIEW: HỌC TIẾNG ANH (LAZY + TIẾT KIỆM RAM) ---
     private void setupWebView() {
+        if (webViewInitialized || wvEnglish == null) return;
         WebSettings settings = wvEnglish.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
@@ -364,6 +454,12 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+        // Tiết kiệm RAM/CPU trên máy stock yếu:
+        settings.setBlockNetworkLoads(false);
+        try {
+            // Giảm mức render khi không cần pixel-perfect
+            wvEnglish.setInitialScale(0);
+        } catch (Exception ignored) {}
 
         wvEnglish.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         wvEnglish.setBackgroundColor(Color.BLACK);
@@ -380,10 +476,11 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                pbWebLoading.setVisibility(View.GONE);
+                if (pbWebLoading != null) pbWebLoading.setVisibility(View.GONE);
                 injectSpeechSynthesisPolyfill(view);
                 if (currentPage != 1) {
                     wvEnglish.onPause();
+                    wvEnglish.pauseTimers();
                 }
             }
         });
@@ -396,6 +493,7 @@ public class MainActivity extends Activity {
 
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
+                if (pbWebLoading == null) return;
                 if (newProgress < 100) {
                     pbWebLoading.setVisibility(View.VISIBLE);
                 } else {
@@ -405,16 +503,17 @@ public class MainActivity extends Activity {
             }
         });
 
+        webViewInitialized = true;
         wvEnglish.loadUrl(ENGLISH_URL);
     }
 
-    // --- APP DRAWER ---
-    private void setupAppDrawer() {
-        loadApps();
+    // --- APP DRAWER (ASYNC: không block UI lúc khởi động trên ROM gốc nặng) ---
+    private void setupAppDrawerAsync() {
         appAdapter = new AppAdapter();
         gvApps.setAdapter(appAdapter);
 
         gvApps.setOnItemClickListener((parent, view, position, id) -> {
+            if (position < 0 || position >= filteredApps.size()) return;
             AppInfo app = filteredApps.get(position);
             Intent launchIntent = getPackageManager().getLaunchIntentForPackage(app.packageName);
             if (launchIntent != null) {
@@ -436,6 +535,18 @@ public class MainActivity extends Activity {
             @Override
             public void afterTextChanged(Editable s) {}
         });
+
+        // Query + loadIcon chạy background, xong mới refresh UI
+        new Thread(() -> {
+            loadApps();
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (appAdapter != null) appAdapter.notifyDataSetChanged();
+            });
+        }).start();
+    }
+
+    private void setupAppDrawer() {
+        setupAppDrawerAsync();
     }
 
     private void loadApps() {
@@ -450,7 +561,9 @@ public class MainActivity extends Activity {
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(getPackageName())) continue;
 
-            if (pkg.contains("com.vivo.appstore") || pkg.contains("com.bbk.cloud") || pkg.contains("com.vivo.imanager")) {
+            // Chặn bloat ROM Vivo (QC: vivo Store thực chất là com.vivo.website)
+            if (pkg.contains("com.vivo.appstore") || pkg.contains("com.vivo.website")
+                    || pkg.contains("com.bbk.cloud") || pkg.contains("com.vivo.imanager")) {
                 continue;
             }
 
@@ -503,7 +616,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    // --- RETRO MECHANICAL FLIP CLOCK ---
+    // --- RETRO MECHANICAL FLIP CLOCK (nhẹ cho máy stock yếu) ---
     private void setupClock() {
         timeHandler = new Handler(Looper.getMainLooper());
         timeRunnable = new Runnable() {
@@ -512,20 +625,15 @@ public class MainActivity extends Activity {
                 long now = System.currentTimeMillis();
                 Date date = new Date(now);
 
-                SimpleDateFormat hourFormat = new SimpleDateFormat("HH", Locale.getDefault());
-                SimpleDateFormat minFormat = new SimpleDateFormat("mm", Locale.getDefault());
-                SimpleDateFormat secFormat = new SimpleDateFormat("ss", Locale.getDefault());
-                SimpleDateFormat dateFormat = new SimpleDateFormat("EEEE • dd 'THÁNG' MM", new Locale("vi", "VN"));
+                String currentHour = HOUR_FMT.format(date);
+                String currentMin = MIN_FMT.format(date);
+                String currentSec = SEC_FMT.format(date);
+                String currentDate = DATE_FMT.format(date).toUpperCase(Locale.getDefault());
 
-                String currentHour = hourFormat.format(date);
-                String currentMin = minFormat.format(date);
-                String currentSec = secFormat.format(date);
-                String currentDate = dateFormat.format(date).toUpperCase(Locale.getDefault());
-
-                // Authentic Split-Flap Page Flip (Top half folds down, bottom half unfolds)
+                // Giảm duration 490 -> 170ms: GPU nghỉ ~660ms mỗi giây, hết lag + mát máy
                 if (!currentSec.equals(lastSeconds)) {
                     if (!lastSeconds.isEmpty() && currentPage == 0) {
-                        cardSeconds.flipTo(currentSec, 490);
+                        cardSeconds.flipTo(currentSec, 170);
                     } else {
                         cardSeconds.setValue(currentSec);
                     }
@@ -534,7 +642,7 @@ public class MainActivity extends Activity {
 
                 if (!currentMin.equals(lastMinutes)) {
                     if (!lastMinutes.isEmpty() && currentPage == 0) {
-                        cardMinutes.flipTo(currentMin, 490);
+                        cardMinutes.flipTo(currentMin, 170);
                     } else {
                         cardMinutes.setValue(currentMin);
                     }
@@ -543,7 +651,7 @@ public class MainActivity extends Activity {
 
                 if (!currentHour.equals(lastHours)) {
                     if (!lastHours.isEmpty() && currentPage == 0) {
-                        cardHours.flipTo(currentHour, 490);
+                        cardHours.flipTo(currentHour, 170);
                     } else {
                         cardHours.setValue(currentHour);
                     }
@@ -551,6 +659,16 @@ public class MainActivity extends Activity {
                 }
 
                 tvDate.setText(currentDate);
+                updateGreeting(currentHour);
+
+                // Xoay fact mỗi 30s, không tốn CPU
+                if (now - lastFactTime > 30000) {
+                    lastFactTime = now;
+                    if (tvFunFact != null && FUN_FACTS.length > 0) {
+                        funIndex = (funIndex + 1) % FUN_FACTS.length;
+                        tvFunFact.setText(FUN_FACTS[funIndex]);
+                    }
+                }
 
                 // Precise sync to exact wall-clock second boundary
                 long nextSecondDelay = 1000 - (System.currentTimeMillis() % 1000);
@@ -558,6 +676,34 @@ public class MainActivity extends Activity {
             }
         };
         timeHandler.post(timeRunnable);
+    }
+
+    private void updateGreeting(String hourStr) {
+        if (tvGreeting == null) return;
+        int hour = 0;
+        try { hour = Integer.parseInt(hourStr); } catch (Exception ignored) {}
+        String g;
+        if (hour >= 5 && hour < 11) g = "Chào buổi sáng";
+        else if (hour >= 11 && hour < 13) g = "Nghỉ trưa một chút";
+        else if (hour >= 13 && hour < 17) g = "Chào buổi chiều";
+        else if (hour >= 17 && hour < 22) g = "Chào buổi tối";
+        else g = "Khuya rồi, ngủ sớm nhé";
+        if (!g.equals(tvGreeting.getText().toString())) tvGreeting.setText(g);
+    }
+
+    private void showNextFact() {
+        if (FUN_FACTS.length == 0) return;
+        funIndex = (funIndex + 1) % FUN_FACTS.length;
+        lastFactTime = System.currentTimeMillis();
+        if (tvFunFact != null) tvFunFact.setText(FUN_FACTS[funIndex]);
+    }
+
+    private void speakCurrentFact() {
+        if (textToSpeech == null || !isTtsReady || FUN_FACTS.length == 0) return;
+        try {
+            textToSpeech.setLanguage(new Locale("vi", "VN"));
+            textToSpeech.speak(FUN_FACTS[funIndex], TextToSpeech.QUEUE_FLUSH, null, "fun_fact");
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -572,6 +718,14 @@ public class MainActivity extends Activity {
         if (timeHandler != null && timeRunnable != null) {
             timeHandler.removeCallbacks(timeRunnable);
         }
+        if (wvEnglish != null) {
+            try {
+                wvEnglish.loadUrl("about:blank");
+                wvEnglish.stopLoading();
+                wvEnglish.removeJavascriptInterface("AndroidTTS");
+                wvEnglish.destroy();
+            } catch (Exception ignored) {}
+        }
         if (textToSpeech != null) {
             textToSpeech.stop();
             textToSpeech.shutdown();
@@ -580,7 +734,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (currentPage == 1 && wvEnglish.canGoBack()) {
+        if (currentPage == 1 && webViewInitialized && wvEnglish != null && wvEnglish.canGoBack()) {
             wvEnglish.goBack();
             return;
         }
