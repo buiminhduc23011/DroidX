@@ -1,13 +1,16 @@
 package com.droidx.launcher;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
 import android.media.AudioManager;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -67,8 +70,12 @@ public class MainActivity extends Activity {
     private String lastHours = "";
     private String lastMinutes = "";
     private String lastSeconds = "";
+    private String lastDate = "";
     private Handler timeHandler;
     private Runnable timeRunnable;
+    private boolean isClockRunning = false;
+    private BroadcastReceiver batteryReceiver;
+    private boolean batteryReceiverRegistered = false;
 
     private static final String[] FUN_FACTS = {
         "Tim bạch tuộc có 3 trái tim, khi bơi một tim sẽ ngừng đập.",
@@ -121,9 +128,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
-        // Keep screen on continuously
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -658,7 +662,10 @@ public class MainActivity extends Activity {
                     lastHours = currentHour;
                 }
 
-                tvDate.setText(currentDate);
+                if (!currentDate.equals(lastDate)) {
+                    tvDate.setText(currentDate);
+                    lastDate = currentDate;
+                }
                 updateGreeting(currentHour);
 
                 // Xoay fact mỗi 30s, không tốn CPU
@@ -675,7 +682,37 @@ public class MainActivity extends Activity {
                 timeHandler.postDelayed(this, nextSecondDelay > 0 ? nextSecondDelay : 1000);
             }
         };
-        timeHandler.post(timeRunnable);
+
+        batteryReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                updateKeepScreenOn(intent);
+            }
+        };
+    }
+
+    private void updateKeepScreenOn(Intent batteryIntent) {
+        if (batteryIntent == null) return;
+        int plugged = batteryIntent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+        if (plugged != 0) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+    }
+
+    private void startClock() {
+        if (!isClockRunning && timeHandler != null && timeRunnable != null) {
+            isClockRunning = true;
+            timeHandler.post(timeRunnable);
+        }
+    }
+
+    private void stopClock() {
+        if (isClockRunning && timeHandler != null && timeRunnable != null) {
+            isClockRunning = false;
+            timeHandler.removeCallbacks(timeRunnable);
+        }
     }
 
     private void updateGreeting(String hourStr) {
@@ -710,14 +747,36 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         hideSystemUI();
+        if (batteryReceiver != null && !batteryReceiverRegistered) {
+            Intent sticky = registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            batteryReceiverRegistered = true;
+            updateKeepScreenOn(sticky);
+        }
+        startClock();
+        if (currentPage == 1 && webViewInitialized && wvEnglish != null) {
+            wvEnglish.onResume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        stopClock();
+        if (batteryReceiver != null && batteryReceiverRegistered) {
+            try {
+                unregisterReceiver(batteryReceiver);
+            } catch (Exception ignored) {}
+            batteryReceiverRegistered = false;
+        }
+        if (webViewInitialized && wvEnglish != null) {
+            wvEnglish.onPause();
+        }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (timeHandler != null && timeRunnable != null) {
-            timeHandler.removeCallbacks(timeRunnable);
-        }
+        stopClock();
         if (wvEnglish != null) {
             try {
                 wvEnglish.loadUrl("about:blank");
